@@ -5,6 +5,8 @@ Read the documentation to know what cli arguments you need.
 """
 import logging
 import sys
+import json
+from redis_sub import start_redis_sub
 from typing import Any, List, Optional
 
 
@@ -18,7 +20,8 @@ from freqtrade.constants import DOCS_LINK
 from freqtrade.exceptions import ConfigurationError, FreqtradeException, OperationalException
 from freqtrade.loggers import setup_logging_pre
 from freqtrade.util.gc_setup import gc_set_threshold
-
+from freqtrade.configuration import setup_utils_configuration
+from freqtrade.enums import RunMode
 
 logger = logging.getLogger('freqtrade')
 
@@ -34,11 +37,25 @@ def main(sysargv: Optional[List[str]] = None) -> None:
         setup_logging_pre()
         arguments = Arguments(sysargv)
         args = arguments.get_parsed_arg()
+        config = setup_utils_configuration(args, RunMode.UTIL_NO_EXCHANGE)
+        setting_path = config['user_data_dir'] / 'settings.json'
+
+        logger.info(f"settings.json path: {setting_path}")
+
+        with open(setting_path, 'r', encoding='utf-8') as fp:
+            data = json.load(fp)
+            bot_id = data.get("bot_id")
+
+        if not bot_id:
+            raise Exception("No bot id")
+
+        logger.info(f"Bot id: {bot_id}")
 
         # Call subcommand.
         if 'func' in args:
             logger.info(f'freqtrade {__version__}')
             gc_set_threshold()
+            start_redis_sub(bot_id, 6379)
             return_code = args['func'](args)
         else:
             # No subcommand was issued.
